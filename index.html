@@ -8,8 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Lightweight Charts (Pinned to stable v4.1.0) -->
-    <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- Lightweight Charts (Switched to jsdelivr for better reliability) -->
+    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -144,8 +144,8 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <!-- Explicit background color to ensure contrast -->
-            <div id="chart-container" class="w-full bg-[#0f172a] rounded-lg border border-slate-800" style="height: 400px;"></div>
+            <!-- Explicit inline styles to force dimensions -->
+            <div id="chart-container" class="w-full rounded-lg border border-slate-800" style="height: 400px; background-color: #0f172a;"></div>
         </div>
     </div>
 
@@ -320,66 +320,64 @@
             const container = document.getElementById('chart-container');
             document.getElementById('chart-ticker').textContent = ticker.replace('.MI', '');
 
-            // 1. Show the modal first
+            // 1. Show the modal FIRST
             modal.classList.remove('hidden');
 
-            // 2. Clear previous chart and container
-            container.innerHTML = '';
+            // 2. Clear previous chart and show loading
+            container.innerHTML = '<p class="text-white p-4 text-center">Loading chart data...</p>';
             if (currentChart) { currentChart.remove(); currentChart = null; }
 
-            // 3. CRITICAL FIX: Wait 100ms for the browser to actually render the modal dimensions
-            setTimeout(async () => {
-                try {
-                    const res = await fetch(`${WORKER_URL}/api/chart/${ticker}`);
-                    if (!res.ok) throw new Error('Failed to fetch chart data');
-                    const data = await res.json();
+            try {
+                // 3. Fetch data WHILE the modal is visible
+                const res = await fetch(`${WORKER_URL}/api/chart/${ticker}`);
+                if (!res.ok) throw new Error('Failed to fetch chart data');
+                const data = await res.json();
 
-                    // Force explicit dimensions on the container
-                    container.style.width = '100%';
-                    container.style.height = '400px';
+                // 4. Wait for the browser to fully paint the modal dimensions
+                await new Promise(resolve => setTimeout(resolve, 150));
 
-                    currentChart = LightweightCharts.createChart(container, {
-                        width: container.clientWidth,
-                        height: 400,
-                        layout: {
-                            background: { type: 'solid', color: '#0f172a' },
-                            textColor: '#ffffff', // Pure white text for max readability
-                        },
-                        grid: {
-                            vertLines: { color: '#334155' },
-                            horzLines: { color: '#334155' },
-                        },
-                        rightPriceScale: {
-                            borderColor: '#475569',
-                        },
-                        timeScale: {
-                            borderColor: '#475569',
-                            timeVisible: false,
-                        },
-                    });
+                // 5. Force explicit dimensions (Fallback to 800px if browser reports 0)
+                const width = container.clientWidth > 0 ? container.clientWidth : 800;
+                container.style.width = `${width}px`;
+                container.style.height = '400px';
 
-                    // NEON GREEN for absolute maximum visibility
-                    const lineSeries = currentChart.addLineSeries({
-                        color: '#00ff00', 
-                        lineWidth: 3,
-                        priceLineVisible: true,
-                        lastValueVisible: true,
-                        crosshairMarkerVisible: true,
-                    });
+                // 6. Create the chart
+                currentChart = LightweightCharts.createChart(container, {
+                    width: width,
+                    height: 400,
+                    layout: {
+                        background: { type: 'solid', color: '#0f172a' },
+                        textColor: '#ffffff',
+                    },
+                    grid: {
+                        vertLines: { color: '#334155' },
+                        horzLines: { color: '#334155' },
+                    },
+                    rightPriceScale: { borderColor: '#475569' },
+                    timeScale: { borderColor: '#475569', timeVisible: false },
+                });
 
-                    const chartData = data.map(d => ({
-                        time: d.date,
-                        value: d.close
-                    }));
+                // 7. Add the Neon Green line
+                const lineSeries = currentChart.addLineSeries({
+                    color: '#00ff00', 
+                    lineWidth: 3,
+                    priceLineVisible: true,
+                    lastValueVisible: true,
+                    crosshairMarkerVisible: true,
+                });
 
-                    lineSeries.setData(chartData);
-                    currentChart.timeScale().fitContent();
+                const chartData = data.map(d => ({
+                    time: d.date,
+                    value: d.close
+                }));
 
-                } catch (error) {
-                    console.error("Chart Error:", error);
-                    container.innerHTML = `<p class="text-red-500 p-4 text-center">Error loading chart: ${error.message}</p>`;
-                }
-            }, 100);
+                lineSeries.setData(chartData);
+                currentChart.timeScale().fitContent();
+
+            } catch (error) {
+                console.error("Chart Error:", error);
+                container.innerHTML = `<p class="text-red-500 p-4 text-center font-bold">ERROR: ${error.message}</p>`;
+            }
         }
 
         function closeChart() {
