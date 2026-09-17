@@ -4,11 +4,11 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>BorsaScreen - FTSE MIB 40 Screener</title>
-    <!-- Tailwind CSS (Warning in console is normal for CDN usage) -->
+    <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Lightweight Charts (Pinned to stable v4.1.0 to prevent API errors) -->
+    <!-- Lightweight Charts (Pinned to stable v4.1.0) -->
     <script src="https://unpkg.com/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
     <script>
         tailwind.config = {
@@ -144,14 +144,15 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <div id="chart-container" class="w-full h-96 bg-slate-950 rounded-lg border border-slate-800"></div>
+            <!-- Changed bg to slate-900 to match chart background perfectly -->
+            <div id="chart-container" class="w-full h-96 bg-slate-900 rounded-lg border border-slate-800"></div>
         </div>
     </div>
 
     <script>
         // --- CONFIGURATION ---
         // CRITICAL: REPLACE THIS WITH YOUR ACTUAL WORKER URL
-        const WORKER_URL = 'https://proud-boat-0a2f.giunov.workers.dev'; 
+        const WORKER_URL = 'https://YOUR_WORKER_URL_HERE.workers.dev'; 
         
         let allStocks = [];
         let filteredStocks = [];
@@ -325,19 +326,20 @@
                 if (!res.ok) throw new Error('Failed to fetch chart data');
                 const data = await res.json();
 
-                // CRITICAL FIX: Ensure container has dimensions before creating chart
+                // Ensure container has dimensions before creating chart
                 const width = container.clientWidth > 0 ? container.clientWidth : 800;
 
+                // HIGH CONTRAST CHART CONFIGURATION
                 currentChart = LightweightCharts.createChart(container, {
                     width: width, 
                     height: 400,
                     layout: { 
-                        background: { type: 'solid', color: '#0f172a' }, // Slightly lighter dark background for better contrast
+                        background: { type: 'solid', color: '#0f172a' }, // Slightly lighter dark background
                         textColor: '#e2e8f0', // Brighter text
                     },
                     grid: { 
-                        vertLines: { color: '#1e293b', style: 2 }, // Subtle dashed grid
-                        horzLines: { color: '#1e293b', style: 2 } 
+                        vertLines: { color: '#1e293b' }, 
+                        horzLines: { color: '#1e293b' } 
                     },
                     timeScale: { 
                         timeVisible: false, 
@@ -350,24 +352,13 @@
                     },
                 });
                 
-                // Use a highly visible, vibrant Cyan color with a thicker line
+                // Bright Cyan line with high visibility settings
                 const lineSeries = currentChart.addLineSeries({ 
                     color: '#22d3ee', // Bright Cyan (pops beautifully on dark backgrounds)
-                    lineWidth: 3,     // Thicker line for better visibility
+                    lineWidth: 3,     // Thicker line
                     priceLineVisible: true, // Shows a dashed line at the current price
                     lastValueVisible: true, // Shows the price tag on the right axis
                     crosshairMarkerVisible: true,
-                });
-                
-                lineSeries.setData(data.map(d => ({ time: d.date, value: d.close })));
-                currentChart.timeScale().fitContent();
-                
-                
-                // Use addLineSeries (more robust than addAreaSeries across all browser versions)
-                const lineSeries = currentChart.addLineSeries({ 
-                    color: '#0ea5e9', 
-                    lineWidth: 2, 
-                    priceLineVisible: false 
                 });
                 
                 lineSeries.setData(data.map(d => ({ time: d.date, value: d.close })));
