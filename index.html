@@ -148,7 +148,9 @@
     </div>
 
     <script>
-        const WORKER_URL = 'https://proud-boat-0a2f.giunov.workers.dev'; // REPLACE THIS
+        // --- CONFIGURATION ---
+        // CRITICAL: REPLACE THIS WITH YOUR ACTUAL WORKER URL
+        const WORKER_URL = 'https://proud-boat-0a2f.giunov.workers.dev'; 
         
         let allStocks = [];
         let filteredStocks = [];
@@ -163,23 +165,36 @@
         async function loadScreener() {
             const statusEl = document.getElementById('data-status');
             const refreshBtn = document.getElementById('refresh-btn');
+            const resultsArea = document.getElementById('results-area');
+            
             statusEl.innerHTML = '<i data-lucide="loader-2" class="w-3.5 h-3.5 animate-spin"></i> Loading...';
             statusEl.className = 'hidden sm:flex items-center gap-1.5 text-xs text-sky-400';
             refreshBtn.classList.add('animate-spin');
             lucide.createIcons();
 
             try {
+                console.log("Fetching from:", `${WORKER_URL}/api/screener`);
                 const res = await fetch(`${WORKER_URL}/api/screener`);
-                if (!res.ok) throw new Error('Failed to fetch');
+                
+                if (!res.ok) throw new Error(`Server Error: ${res.status}`);
+                
                 allStocks = await res.json();
+                console.log("Received stocks:", allStocks.length);
                 
                 statusEl.innerHTML = '<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Live data';
                 statusEl.className = 'hidden sm:flex items-center gap-1.5 text-xs text-emerald-400';
                 applyFilters();
             } catch (error) {
+                console.error("Fetch Error:", error);
                 statusEl.innerHTML = '<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> Error';
                 statusEl.className = 'hidden sm:flex items-center gap-1.5 text-xs text-red-400';
-                document.getElementById('results-area').innerHTML = `<div class="rounded-xl border border-red-500/20 bg-red-500/5 p-12 text-center"><p class="text-red-400">Error loading data. Check Worker URL.</p></div>`;
+                resultsArea.innerHTML = `
+                    <div class="rounded-xl border border-red-500/20 bg-red-500/5 p-12 text-center">
+                        <h3 class="text-red-400 font-bold mb-2">Failed to Load Data</h3>
+                        <p class="text-red-300 text-sm mb-4">${error.message}</p>
+                        <p class="text-slate-400 text-xs">Check your Worker URL in index.html (Line 109). Ensure it ends in .workers.dev and has no trailing slash.</p>
+                        <button onclick="loadScreener()" class="mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 rounded-lg text-white text-sm font-medium">Retry</button>
+                    </div>`;
             } finally {
                 refreshBtn.classList.remove('animate-spin');
                 lucide.createIcons();
@@ -332,4 +347,9 @@
         }
 
         function closeChart() {
-            document.getElementById('chart-modal').
+            document.getElementById('chart-modal').classList.add('hidden');
+            if (currentChart) { currentChart.remove(); currentChart = null; }
+        }
+    </script>
+</body>
+</html>
