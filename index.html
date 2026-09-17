@@ -8,7 +8,7 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Lightweight Charts (Switched to jsdelivr for better reliability) -->
+    <!-- Lightweight Charts -->
     <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
     <script>
         tailwind.config = {
@@ -333,13 +333,13 @@
                 if (!res.ok) throw new Error('Failed to fetch chart data');
                 const data = await res.json();
 
-                // 4. Wait for the browser to fully paint the modal dimensions
-                await new Promise(resolve => setTimeout(resolve, 150));
+                // 4. CRITICAL FIX: Wait for the browser's next paint cycle
+                // This ensures the modal is fully rendered and has actual pixel dimensions
+                await new Promise(resolve => requestAnimationFrame(resolve));
 
-                // 5. Force explicit dimensions (Fallback to 800px if browser reports 0)
-                const width = container.clientWidth > 0 ? container.clientWidth : 800;
-                container.style.width = `${width}px`;
-                container.style.height = '400px';
+                // 5. Get dimensions (Fallback to 800px if browser still reports 0)
+                let width = container.clientWidth;
+                if (width === 0) width = 800; 
 
                 // 6. Create the chart
                 currentChart = LightweightCharts.createChart(container, {
@@ -357,7 +357,11 @@
                     timeScale: { borderColor: '#475569', timeVisible: false },
                 });
 
-                // 7. Add the Neon Green line
+                // 7. THE MAGIC FIX: Force the chart to resize to the container's actual width
+                // This redraws the canvas if it initialized at 0x0
+                currentChart.resize(width, 400);
+
+                // 8. Add the Neon Green line
                 const lineSeries = currentChart.addLineSeries({
                     color: '#00ff00', 
                     lineWidth: 3,
