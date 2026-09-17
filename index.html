@@ -134,7 +134,7 @@
     </footer>
 
     <!-- Chart Modal -->
-    <div id="chart-modal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm flex items-center justify-center z-50 p-4">
+    <div id="chart-modal" class="hidden fixed inset-0 bg-black/80 backdrop-blur-sm flex items-center justify-center z-50 p-4">
         <div class="bg-slate-900 border border-slate-700 rounded-xl shadow-2xl w-full max-w-4xl p-6">
             <div class="flex justify-between items-center mb-4">
                 <h2 class="text-lg font-bold text-white flex items-center gap-2">
@@ -144,8 +144,8 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <!-- Changed bg to slate-900 to match chart background perfectly -->
-            <div id="chart-container" class="w-full h-96 bg-slate-900 rounded-lg border border-slate-800"></div>
+            <!-- Explicit background color to ensure contrast -->
+            <div id="chart-container" class="w-full bg-[#0f172a] rounded-lg border border-slate-800" style="height: 400px;"></div>
         </div>
     </div>
 
@@ -316,62 +316,74 @@
         }
 
         async function openChart(ticker) {
-            document.getElementById('chart-modal').classList.remove('hidden');
-            document.getElementById('chart-ticker').textContent = ticker.replace('.MI', '');
+            const modal = document.getElementById('chart-modal');
             const container = document.getElementById('chart-container');
-            container.innerHTML = ''; 
-            
-            try {
-                const res = await fetch(`${WORKER_URL}/api/chart/${ticker}`);
-                if (!res.ok) throw new Error('Failed to fetch chart data');
-                const data = await res.json();
+            document.getElementById('chart-ticker').textContent = ticker.replace('.MI', '');
 
-                // Ensure container has dimensions before creating chart
-                const width = container.clientWidth > 0 ? container.clientWidth : 800;
+            // 1. Show the modal first
+            modal.classList.remove('hidden');
 
-                // HIGH CONTRAST CHART CONFIGURATION
-                currentChart = LightweightCharts.createChart(container, {
-                    width: width, 
-                    height: 400,
-                    layout: { 
-                        background: { type: 'solid', color: '#0f172a' }, // Slightly lighter dark background
-                        textColor: '#e2e8f0', // Brighter text
-                    },
-                    grid: { 
-                        vertLines: { color: '#1e293b' }, 
-                        horzLines: { color: '#1e293b' } 
-                    },
-                    timeScale: { 
-                        timeVisible: false, 
-                        borderColor: '#334155',
-                        textColor: '#94a3b8'
-                    },
-                    rightPriceScale: { 
-                        borderColor: '#334155',
-                        textColor: '#94a3b8'
-                    },
-                });
-                
-                // Bright Cyan line with high visibility settings
-                const lineSeries = currentChart.addLineSeries({ 
-                    color: '#22d3ee', // Bright Cyan (pops beautifully on dark backgrounds)
-                    lineWidth: 3,     // Thicker line
-                    priceLineVisible: true, // Shows a dashed line at the current price
-                    lastValueVisible: true, // Shows the price tag on the right axis
-                    crosshairMarkerVisible: true,
-                });
-                
-                lineSeries.setData(data.map(d => ({ time: d.date, value: d.close })));
-                currentChart.timeScale().fitContent();
-            } catch (error) { 
-                console.error("Chart Error:", error);
-                container.innerHTML = '<p class="p-10 text-center text-red-400">Error loading chart data. Check console for details.</p>'; 
-            }
+            // 2. Clear previous chart and container
+            container.innerHTML = '';
+            if (currentChart) { currentChart.remove(); currentChart = null; }
+
+            // 3. CRITICAL FIX: Wait 100ms for the browser to actually render the modal dimensions
+            setTimeout(async () => {
+                try {
+                    const res = await fetch(`${WORKER_URL}/api/chart/${ticker}`);
+                    if (!res.ok) throw new Error('Failed to fetch chart data');
+                    const data = await res.json();
+
+                    // Force explicit dimensions on the container
+                    container.style.width = '100%';
+                    container.style.height = '400px';
+
+                    currentChart = LightweightCharts.createChart(container, {
+                        width: container.clientWidth,
+                        height: 400,
+                        layout: {
+                            background: { type: 'solid', color: '#0f172a' },
+                            textColor: '#ffffff', // Pure white text for max readability
+                        },
+                        grid: {
+                            vertLines: { color: '#334155' },
+                            horzLines: { color: '#334155' },
+                        },
+                        rightPriceScale: {
+                            borderColor: '#475569',
+                        },
+                        timeScale: {
+                            borderColor: '#475569',
+                            timeVisible: false,
+                        },
+                    });
+
+                    // NEON GREEN for absolute maximum visibility
+                    const lineSeries = currentChart.addLineSeries({
+                        color: '#00ff00', 
+                        lineWidth: 3,
+                        priceLineVisible: true,
+                        lastValueVisible: true,
+                        crosshairMarkerVisible: true,
+                    });
+
+                    const chartData = data.map(d => ({
+                        time: d.date,
+                        value: d.close
+                    }));
+
+                    lineSeries.setData(chartData);
+                    currentChart.timeScale().fitContent();
+
+                } catch (error) {
+                    console.error("Chart Error:", error);
+                    container.innerHTML = `<p class="text-red-500 p-4 text-center">Error loading chart: ${error.message}</p>`;
+                }
+            }, 100);
         }
 
         function closeChart() {
             document.getElementById('chart-modal').classList.add('hidden');
-            if (currentChart) { currentChart.remove(); currentChart = null; }
         }
     </script>
 </body>
