@@ -63,7 +63,6 @@
                     <input type="text" id="search-input" oninput="applyFilters()" placeholder="Search ticker..." 
                         class="pl-9 pr-3 py-2 bg-slate-800/50 border border-slate-700/50 rounded-lg text-sm text-white placeholder-slate-500 focus:outline-none focus:border-sky-500/50 w-40 sm:w-48">
                 </div>
-                <!-- Sort Dropdown -->
                 <select id="sort-select" onchange="applyFilters()" class="bg-slate-800/50 border border-slate-700/50 rounded-lg text-sm text-white px-3 py-2 focus:outline-none focus:border-sky-500/50">
                     <option value="roe_desc">Best ROE (Highest)</option>
                     <option value="pe_asc">Best P/E (Lowest)</option>
@@ -71,7 +70,6 @@
                     <option value="upside_desc">Highest Upside</option>
                     <option value="ticker_asc">Ticker (A-Z)</option>
                 </select>
-                <!-- View Toggle -->
                 <div class="flex bg-slate-800/50 border border-slate-700/50 rounded-lg overflow-hidden">
                     <button onclick="setView('grid')" id="btn-grid" class="px-3 py-2 text-sm transition-colors bg-sky-500/20 text-sky-400">
                         <i data-lucide="grid-3x3" class="w-4 h-4"></i>
@@ -150,7 +148,7 @@
     <script>
         // --- CONFIGURATION ---
         // CRITICAL: REPLACE THIS WITH YOUR ACTUAL WORKER URL
-        const WORKER_URL = 'https://proud-boat-0a2f.giunov.workers.dev'; 
+        const WORKER_URL = 'https://YOUR_WORKER_URL_HERE.workers.dev'; 
         
         let allStocks = [];
         let filteredStocks = [];
@@ -173,28 +171,17 @@
             lucide.createIcons();
 
             try {
-                console.log("Fetching from:", `${WORKER_URL}/api/screener`);
                 const res = await fetch(`${WORKER_URL}/api/screener`);
-                
                 if (!res.ok) throw new Error(`Server Error: ${res.status}`);
-                
                 allStocks = await res.json();
-                console.log("Received stocks:", allStocks.length);
                 
                 statusEl.innerHTML = '<i data-lucide="check-circle-2" class="w-3.5 h-3.5"></i> Live data';
                 statusEl.className = 'hidden sm:flex items-center gap-1.5 text-xs text-emerald-400';
                 applyFilters();
             } catch (error) {
-                console.error("Fetch Error:", error);
                 statusEl.innerHTML = '<i data-lucide="alert-circle" class="w-3.5 h-3.5"></i> Error';
                 statusEl.className = 'hidden sm:flex items-center gap-1.5 text-xs text-red-400';
-                resultsArea.innerHTML = `
-                    <div class="rounded-xl border border-red-500/20 bg-red-500/5 p-12 text-center">
-                        <h3 class="text-red-400 font-bold mb-2">Failed to Load Data</h3>
-                        <p class="text-red-300 text-sm mb-4">${error.message}</p>
-                        <p class="text-slate-400 text-xs">Check your Worker URL in index.html (Line 109). Ensure it ends in .workers.dev and has no trailing slash.</p>
-                        <button onclick="loadScreener()" class="mt-4 px-4 py-2 bg-sky-500 hover:bg-sky-600 rounded-lg text-white text-sm font-medium">Retry</button>
-                    </div>`;
+                resultsArea.innerHTML = `<div class="rounded-xl border border-red-500/20 bg-red-500/5 p-12 text-center"><h3 class="text-red-400 font-bold mb-2">Failed to Load Data</h3><p class="text-red-300 text-sm mb-4">${error.message}</p></div>`;
             } finally {
                 refreshBtn.classList.remove('animate-spin');
                 lucide.createIcons();
@@ -221,7 +208,6 @@
                 return matchSearch && matchPe && matchRoe && matchRsi;
             });
 
-            // Sorting Logic
             filteredStocks.sort((a, b) => {
                 if (sortBy === 'roe_desc') return b.roe - a.roe;
                 if (sortBy === 'pe_asc') return a.pe - b.pe;
@@ -330,20 +316,32 @@
             document.getElementById('chart-ticker').textContent = ticker.replace('.MI', '');
             const container = document.getElementById('chart-container');
             container.innerHTML = ''; 
+            
             try {
                 const res = await fetch(`${WORKER_URL}/api/chart/${ticker}`);
+                if (!res.ok) throw new Error('Failed to fetch chart data');
                 const data = await res.json();
+
+                // CRITICAL FIX: Lightweight Charts cannot render in a 'display: none' container.
+                // If clientWidth is 0, we force a default width of 800px.
+                const width = container.clientWidth > 0 ? container.clientWidth : 800;
+
                 currentChart = LightweightCharts.createChart(container, {
-                    width: container.clientWidth, height: 400,
+                    width: width, 
+                    height: 400,
                     layout: { background: { type: 'solid', color: '#020617' }, textColor: '#94a3b8' },
                     grid: { vertLines: { color: '#1e293b' }, horzLines: { color: '#1e293b' } },
                     timeScale: { timeVisible: false, borderColor: '#334155' },
                     rightPriceScale: { borderColor: '#334155' },
                 });
+                
                 const areaSeries = currentChart.addAreaSeries({ topColor: 'rgba(14, 165, 233, 0.4)', bottomColor: 'rgba(14, 165, 233, 0.0)', lineColor: '#0ea5e9', lineWidth: 2, priceLineVisible: false });
                 areaSeries.setData(data.map(d => ({ time: d.date, value: d.close })));
                 currentChart.timeScale().fitContent();
-            } catch (error) { container.innerHTML = '<p class="p-10 text-center text-red-400">Error loading chart data.</p>'; }
+            } catch (error) { 
+                console.error("Chart Error:", error);
+                container.innerHTML = '<p class="p-10 text-center text-red-400">Error loading chart data.</p>'; 
+            }
         }
 
         function closeChart() {
