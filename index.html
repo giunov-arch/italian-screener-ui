@@ -8,8 +8,8 @@
     <script src="https://cdn.tailwindcss.com"></script>
     <!-- Lucide Icons -->
     <script src="https://unpkg.com/lucide@latest"></script>
-    <!-- Lightweight Charts -->
-    <script src="https://cdn.jsdelivr.net/npm/lightweight-charts@4.1.0/dist/lightweight-charts.standalone.production.js"></script>
+    <!-- Chart.js (Switched for bulletproof rendering) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <script>
         tailwind.config = {
             darkMode: 'class',
@@ -144,8 +144,10 @@
                     <i data-lucide="x" class="w-5 h-5"></i>
                 </button>
             </div>
-            <!-- Explicit inline styles to force dimensions -->
-            <div id="chart-container" class="w-full rounded-lg border border-slate-800" style="height: 400px; background-color: #0f172a;"></div>
+            <!-- Chart.js Canvas Container -->
+            <div class="relative w-full h-96 bg-slate-950 rounded-lg border border-slate-800 p-2">
+                <canvas id="myChart"></canvas>
+            </div>
         </div>
     </div>
 
@@ -157,7 +159,7 @@
         let allStocks = [];
         let filteredStocks = [];
         let currentView = 'grid';
-        let currentChart = null;
+        let myChartInstance = null;
 
         document.addEventListener('DOMContentLoaded', () => {
             lucide.createIcons();
@@ -317,70 +319,93 @@
 
         async function openChart(ticker) {
             const modal = document.getElementById('chart-modal');
-            const container = document.getElementById('chart-container');
+            const canvas = document.getElementById('myChart');
             document.getElementById('chart-ticker').textContent = ticker.replace('.MI', '');
 
             // 1. Show the modal FIRST
             modal.classList.remove('hidden');
 
-            // 2. Clear previous chart and show loading
-            container.innerHTML = '<p class="text-white p-4 text-center">Loading chart data...</p>';
-            if (currentChart) { currentChart.remove(); currentChart = null; }
+            // 2. Destroy previous chart instance if it exists
+            if (myChartInstance) {
+                myChartInstance.destroy();
+            }
 
             try {
-                // 3. Fetch data WHILE the modal is visible
+                // 3. Fetch data
                 const res = await fetch(`${WORKER_URL}/api/chart/${ticker}`);
                 if (!res.ok) throw new Error('Failed to fetch chart data');
                 const data = await res.json();
 
-                // 4. CRITICAL FIX: Wait for the browser's next paint cycle
-                // This ensures the modal is fully rendered and has actual pixel dimensions
-                await new Promise(resolve => requestAnimationFrame(resolve));
+                const labels = data.map(d => d.date);
+                const prices = data.map(d => d.close);
 
-                // 5. Get dimensions (Fallback to 800px if browser still reports 0)
-                let width = container.clientWidth;
-                if (width === 0) width = 800; 
+                // 4. Wait for modal to fully render in DOM
+                await new Promise(resolve => setTimeout(resolve, 150));
 
-                // 6. Create the chart
-                currentChart = LightweightCharts.createChart(container, {
-                    width: width,
-                    height: 400,
-                    layout: {
-                        background: { type: 'solid', color: '#0f172a' },
-                        textColor: '#ffffff',
+                const ctx = canvas.getContext('2d');
+
+                // Create a beautiful gradient for the area under the line
+                const gradient = ctx.createLinearGradient(0, 0, 0, 400);
+                gradient.addColorStop(0, 'rgba(34, 211, 238, 0.4)'); // Bright Cyan top
+                gradient.addColorStop(1, 'rgba(34, 211, 238, 0.0)'); // Transparent bottom
+
+                // 5. Create Chart.js instance
+                myChartInstance = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: labels,
+                        datasets: [{
+                            label: 'Price (€)',
+                            data: prices,
+                            borderColor: '#22d3ee', // Bright Cyan line
+                            backgroundColor: gradient,
+                            borderWidth: 3,
+                            pointRadius: 0, // Hide dots for a clean professional look
+                            pointHoverRadius: 6,
+                            pointHoverBackgroundColor: '#ffffff',
+                            fill: true,
+                            tension: 0.1 // Slight curve
+                        }]
                     },
-                    grid: {
-                        vertLines: { color: '#334155' },
-                        horzLines: { color: '#334155' },
-                    },
-                    rightPriceScale: { borderColor: '#475569' },
-                    timeScale: { borderColor: '#475569', timeVisible: false },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            intersect: false,
+                            mode: 'index',
+                        },
+                        plugins: {
+                            legend: { display: false },
+                            tooltip: {
+                                backgroundColor: '#1e293b',
+                                titleColor: '#f8fafc',
+                                bodyColor: '#22d3ee',
+                                borderColor: '#334155',
+                                borderWidth: 1,
+                                padding: 10,
+                                displayColors: false,
+                                callbacks: {
+                                    label: function(context) {
+                                        return '€' + context.parsed.y.toFixed(2);
+                                    }
+                                }
+                            }
+                        },
+                        scales: {
+                            x: {
+                                grid: { color: '#1e293b', drawBorder: false },
+                                ticks: { color: '#94a3b8', maxTicksLimit: 8 }
+                            },
+                            y: {
+                                grid: { color: '#1e293b', drawBorder: false },
+                                ticks: { color: '#94a3b8' }
+                            }
+                        }
+                    }
                 });
-
-                // 7. THE MAGIC FIX: Force the chart to resize to the container's actual width
-                // This redraws the canvas if it initialized at 0x0
-                currentChart.resize(width, 400);
-
-                // 8. Add the Neon Green line
-                const lineSeries = currentChart.addLineSeries({
-                    color: '#00ff00', 
-                    lineWidth: 3,
-                    priceLineVisible: true,
-                    lastValueVisible: true,
-                    crosshairMarkerVisible: true,
-                });
-
-                const chartData = data.map(d => ({
-                    time: d.date,
-                    value: d.close
-                }));
-
-                lineSeries.setData(chartData);
-                currentChart.timeScale().fitContent();
 
             } catch (error) {
                 console.error("Chart Error:", error);
-                container.innerHTML = `<p class="text-red-500 p-4 text-center font-bold">ERROR: ${error.message}</p>`;
             }
         }
 
